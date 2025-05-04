@@ -19,18 +19,5 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       include: ['buffer', 'util'],
     },
-    build: {
-      rollupOptions: {
-        external: ['recharts'],
-        output: {
-          globals: {
-            recharts: 'Recharts'
-          }
-        }
-      },
-      chunkSizeWarningLimit: 1600,
-      sourcemap: true
-    },
-    base: '/'
   }
 })
