@@ -19,17 +19,20 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ['buffer', 'util'],
+      include: ['buffer', 'util', 'recharts'],
+      exclude: [],
     },
     build: {
+      commonjsOptions: {
+        include: [/node_modules/],
+      },
       rollupOptions: {
-        external: ['recharts'],
         output: {
-          globals: {
-            recharts: 'Recharts'
-          }
-        }
-      }
-    }
+          manualChunks: {
+            'recharts': ['recharts'],
+          },
+        },
+      },
+    },
   }
 })
