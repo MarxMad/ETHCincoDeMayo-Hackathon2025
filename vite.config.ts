@@ -27,7 +27,10 @@ export default defineConfig(({ mode }) => {
             recharts: 'Recharts'
           }
         }
-      }
-    }
+      },
+      chunkSizeWarningLimit: 1600,
+      sourcemap: true
+    },
+    base: '/'
   }
 })
