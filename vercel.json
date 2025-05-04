@@ -12,7 +12,10 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/index.html",
+      "headers": {
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.vercel.app https://*.walletconnect.com https://*.rainbow.me; style-src 'self' 'unsafe-inline' https://*.rainbow.me; img-src 'self' data: https://*.walletconnect.com https://*.rainbow.me; connect-src 'self' https://*.walletconnect.com https://*.rainbow.me wss://*.walletconnect.com; font-src 'self' data: https://*.rainbow.me;"
+      }
     }
   ]
 } 
