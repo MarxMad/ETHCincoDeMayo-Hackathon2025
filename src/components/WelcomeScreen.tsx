@@ -162,7 +162,7 @@ const WelcomeScreen = ({ onStart }: WelcomeScreenProps) => {
                   transition="all 0.3s"
                 >
                   <Image
-                    src="/unifood-logo.png"
+                    src="/unifood-logo.svg"
                     alt="UniFood Logo"
                     boxSize="200px"
                     objectFit="contain"

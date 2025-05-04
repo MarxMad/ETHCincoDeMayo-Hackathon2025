@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { config } from '../config';
 
 interface UngateResponse {
@@ -44,19 +44,25 @@ const ungateService = {
 
       return response.data.response;
     } catch (error) {
-      if (error instanceof AxiosError) {
-        const ungateError = error.response?.data as UngateError;
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'isAxiosError' in error &&
+        (error as any).isAxiosError
+      ) {
+        const axiosError = error as any;
+        const ungateError = axiosError.response?.data as UngateError;
         console.error('Error de Ungate:', {
-          message: ungateError?.message || error.message,
-          code: ungateError?.code || error.code,
+          message: ungateError?.message || axiosError.message,
+          code: ungateError?.code || axiosError.code,
           details: ungateError?.details,
         });
 
-        if (error.response?.status === 401) {
+        if (axiosError.response?.status === 401) {
           return 'Lo siento, hay un problema de autenticación con el servicio. Por favor, contacta al soporte.';
         }
 
-        if (error.response?.status === 429) {
+        if (axiosError.response?.status === 429) {
           return 'El servicio está recibiendo muchas solicitudes. Por favor, intenta de nuevo en unos minutos.';
         }
       }

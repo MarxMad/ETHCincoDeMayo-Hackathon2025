@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -58,11 +58,14 @@ import {
 } from '@chakra-ui/react';
 import { FaGraduationCap, FaCheckCircle, FaHistory, FaInfoCircle, FaWallet, FaBell, FaUserGraduate, FaCalendarAlt, FaMoneyBillWave, FaChartLine, FaCog, FaSignOutAlt } from 'react-icons/fa';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { scholarshipService } from '../services/api';
+import { useAccount, useSignMessage, useNetwork, useContractWrite, useContractRead } from 'wagmi';
+import { Tooltip as RechartsTooltip } from 'recharts';
 
 interface Scholarship {
   id: string;
   amount: number;
-  status: 'available' | 'claimed' | 'pending';
+  status: 'available' | 'claimed' | 'pending' | 'verified';
   claimDate?: string;
   type: string;
   requirements: string[];
@@ -74,9 +77,62 @@ interface Scholarship {
   }[];
 }
 
+const ZKSYNC_SEPOLIA_ID = 300; // ID de ZKsync Sepolia Testnet
+const CONTRACT_ADDRESS = '0x44Ef6C17d14e35660dAe0769Ab42F6295f09fB48';
+const MANTLE_ID = 5003;
+const REGISTER_ABI = [
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_alumno", "type": "address" }
+    ],
+    "name": "registerStudent",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "", "type": "address" }
+    ],
+    "name": "registeredStudents",
+    "outputs": [
+      { "internalType": "bool", "name": "", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
 const ClaimScholarship = () => {
+  const { address, isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  const { chain } = useNetwork();
   const [studentId, setStudentId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { write, isLoading: isClaiming } = useContractWrite({
+    address: CONTRACT_ADDRESS,
+    abi: REGISTER_ABI,
+    functionName: 'registerStudent',
+    args: address ? [address] : undefined,
+    onSuccess: () => {
+      toast({
+        title: '¡Beca reclamada!',
+        description: 'Has sido registrado exitosamente como becario.',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Error',
+        description: 'No se pudo reclamar la beca. ¿Ya estás registrado?',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  });
   const [scholarship, setScholarship] = useState<Scholarship | null>(null);
   const toast = useToast();
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -141,7 +197,137 @@ const ClaimScholarship = () => {
     },
   ]);
 
-  const handleClaim = async () => {
+  // Hook para verificar el estado del estudiante
+  const { data: isRegistered, isLoading: isChecking } = useContractRead({
+    address: CONTRACT_ADDRESS,
+    abi: REGISTER_ABI,
+    functionName: 'registeredStudents',
+    args: [address],
+    enabled: !!address && isConnected && chain?.id === MANTLE_ID,
+  });
+
+  // Hook para registrar estudiante
+  const { write: registerStudent, isLoading: isRegistering } = useContractWrite({
+    address: CONTRACT_ADDRESS,
+    abi: REGISTER_ABI,
+    functionName: 'registerStudent',
+    args: [address],
+    onSuccess: () => {
+      toast({
+        title: '¡Registro exitoso!',
+        description: 'Has sido registrado como becario.',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'No se pudo registrar el estudiante',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  });
+
+  // Función para forzar el cambio de red
+  const switchToMantle = async () => {
+    if (!window.ethereum) {
+      toast({
+        title: 'Error',
+        description: 'MetaMask no está instalado',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      // Primero intentamos agregar la red si no existe
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: '0x138b',
+            chainName: 'Mantle Testnet',
+            nativeCurrency: {
+              name: 'Mantle',
+              symbol: 'MNT',
+              decimals: 18,
+            },
+            rpcUrls: ['https://rpc.sepolia.mantle.https://endpoints.omniatech.io/v1/mantle/sepolia/public'],
+            blockExplorerUrls: ['https://explorer.testnet.mantle.xyz'],
+          }],
+        });
+      } catch (addError) {
+        console.log('La red ya existe o hubo un error al agregarla:', addError);
+      }
+
+      // Luego forzamos el cambio de red
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x138b' }],
+      });
+      // Si llegamos aquí, el cambio fue exitoso
+      toast({
+        title: '¡Red cambiada!',
+        description: 'Conectado a Mantle Testnet',
+        status: 'success',
+        duration: 4000,
+        isClosable: true,
+      });
+    } catch (switchError) {
+      // Solo mostrar error si realmente ocurre
+      if (
+        typeof switchError === 'object' &&
+        switchError !== null &&
+        'code' in switchError &&
+        (switchError as any).code === 4902
+      ) {
+        toast({
+          title: 'Error',
+          description: 'No se pudo cambiar a Mantle Testnet. Por favor intenta nuevamente.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: 'No se pudo cambiar a Mantle Testnet. Por favor intenta nuevamente.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+      console.error('Error al cambiar de red:', switchError);
+    }
+  };
+
+  // Verificar y forzar el cambio de red cuando se conecta la wallet
+  useEffect(() => {
+    if (isConnected && chain) {
+      console.log('Red actual:', chain.name);
+      console.log('ID de la red:', chain.id);
+      
+      if (chain.id !== 5003) {
+        toast({
+          title: 'Cambiando de red',
+          description: 'Cambiando a Mantle Testnet...',
+          status: 'info',
+          duration: 3000,
+          isClosable: true,
+        });
+        // Forzar el cambio de red
+        switchToMantle();
+      }
+    }
+  }, [chain, isConnected, toast]);
+
+  const handleVerify = async () => {
     if (!studentId.trim()) {
       toast({
         title: 'Error',
@@ -153,50 +339,68 @@ const ClaimScholarship = () => {
       return;
     }
 
-    setIsLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const mockScholarship: Scholarship = {
-        id: 'BEC-2024-001',
-        amount: 1000,
-        status: 'available',
-        type: 'Beca de Excelencia',
-        requirements: [
-          'Promedio mínimo de 8.5',
-          'Estudiante regular',
-          'Sin adeudos'
-        ],
-        expirationDate: '2024-12-31',
-        usageHistory: [
-          {
-            date: '2024-03-15',
-            amount: 150,
-            location: 'Cafetería Central'
-          },
-          {
-            date: '2024-03-20',
-            amount: 200,
-            location: 'Cafetería Norte'
-          }
-        ]
-      };
-      
-      setScholarship(mockScholarship);
-      
+    if (!isConnected || !address) {
       toast({
-        title: 'Beca encontrada',
-        description: 'Se ha encontrado una beca disponible para ti',
-        status: 'success',
+        title: 'Error',
+        description: 'Por favor conecta tu wallet primero',
+        status: 'error',
         duration: 3000,
         isClosable: true,
       });
-    } catch (error) {
+      return;
+    }
+
+    if (chain?.id !== MANTLE_ID) {
       toast({
         title: 'Error',
-        description: 'No se pudo verificar la beca. Por favor intenta nuevamente.',
+        description: 'Por favor conéctate a Mantle Testnet',
         status: 'error',
         duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (isRegistered) {
+        toast({
+          title: 'Estudiante registrado',
+          description: 'Tu beca ha sido verificada exitosamente',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+
+        setScholarship({
+          id: studentId,
+          amount: 0,
+          status: 'verified',
+          type: 'Beca de Excelencia',
+          requirements: [
+            'Estudiante registrado',
+            'Wallet conectada'
+          ],
+          expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          usageHistory: []
+        });
+      } else {
+        toast({
+          title: 'Estudiante no registrado',
+          description: 'No se encontró tu registro en el sistema de becas',
+          status: 'warning',
+          duration: 3000,
+          isClosable: true,
+        });
+        setScholarship(null);
+      }
+    } catch (error) {
+      console.error('Error al verificar estudiante:', error);
+      toast({
+        title: 'Error',
+        description: `Error al verificar estudiante: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        status: 'error',
+        duration: 5000,
         isClosable: true,
       });
     } finally {
@@ -207,7 +411,6 @@ const ClaimScholarship = () => {
   const handleConfirmClaim = async () => {
     if (!scholarship) return;
 
-    setIsLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1500));
       
@@ -232,8 +435,6 @@ const ClaimScholarship = () => {
         duration: 3000,
         isClosable: true,
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -241,6 +442,10 @@ const ClaimScholarship = () => {
     if (!scholarship?.usageHistory) return scholarship?.amount || 0;
     const used = scholarship.usageHistory.reduce((sum, usage) => sum + usage.amount, 0);
     return (scholarship.amount - used);
+  };
+
+  const handleClaim = () => {
+    if (write) write();
   };
 
   return (
@@ -340,7 +545,7 @@ const ClaimScholarship = () => {
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value)}
                   placeholder="Ingresa tu ID de estudiante"
-                  isDisabled={isLoading || scholarship?.status === 'claimed'}
+                  isDisabled={scholarship?.status === 'claimed'}
                 />
                 <FormHelperText>
                   Ingresa el ID que te proporcionó tu institución educativa
@@ -349,13 +554,25 @@ const ClaimScholarship = () => {
 
               <Button
                 colorScheme="brand"
-                onClick={handleClaim}
-                isLoading={isLoading}
-                isDisabled={scholarship?.status === 'claimed'}
+                onClick={handleVerify}
+                isDisabled={!isConnected || chain?.id !== MANTLE_ID || isLoading || isChecking}
+                isLoading={isLoading || isChecking}
                 leftIcon={<FaGraduationCap />}
               >
-                Verificar Beca
+                {isChecking ? 'Verificando...' : 'Verificar Beca'}
               </Button>
+
+              {!isRegistered && isConnected && (
+                <Button
+                  colorScheme="brand"
+                  onClick={() => registerStudent?.()}
+                  isDisabled={!registerStudent || isRegistering}
+                  isLoading={isRegistering}
+                  leftIcon={<FaGraduationCap />}
+                >
+                  {isRegistering ? 'Registrando...' : 'Registrar Estudiante'}
+                </Button>
+              )}
 
               {!scholarship && studentId && (
                 <Alert status="info">
@@ -368,6 +585,15 @@ const ClaimScholarship = () => {
                   </Box>
                 </Alert>
               )}
+
+              <Button
+                colorScheme="brand"
+                onClick={handleClaim}
+                isDisabled={!isConnected || chain?.id !== MANTLE_ID || !write}
+                leftIcon={<FaGraduationCap />}
+              >
+                Reclamar Beca
+              </Button>
             </VStack>
           </TabPanel>
 
@@ -442,7 +668,7 @@ const ClaimScholarship = () => {
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="name" />
                               <YAxis />
-                              <Tooltip />
+                              <RechartsTooltip />
                               <Line type="monotone" dataKey="gasto" stroke="#8884d8" />
                               <Line type="monotone" dataKey="presupuesto" stroke="#82ca9d" />
                             </LineChart>
@@ -464,7 +690,7 @@ const ClaimScholarship = () => {
                                 cx="50%"
                                 cy="50%"
                                 labelLine={false}
-                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                                 outerRadius={80}
                                 fill="#8884d8"
                                 dataKey="value"
@@ -473,7 +699,7 @@ const ClaimScholarship = () => {
                                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                               </Pie>
-                              <Tooltip />
+                              <RechartsTooltip />
                             </PieChart>
                           </ResponsiveContainer>
                         </AspectRatio>

@@ -98,20 +98,23 @@ const theme = extendTheme({
   },
 })
 
-// Configuración de Mantle Testnet
-const mantleTestnet = {
+// Configuración de Mantle Sepolia
+const mantleSepolia = {
   ...mainnet,
-  id: 5001,
-  name: 'Mantle Testnet',
-  network: 'mantle-testnet',
+  id: 5003,
+  name: 'Mantle Sepolia Testnet',
+  network: 'mantle-sepolia',
   nativeCurrency: {
     name: 'MNT',
     symbol: 'MNT',
     decimals: 18,
   },
   rpcUrls: {
-    default: { http: ['https://rpc.testnet.mantle.xyz'] },
-    public: { http: ['https://rpc.testnet.mantle.xyz'] },
+    default: { http: ['https://rpc.sepolia.mantle.xyz'] },
+    public: { http: ['https://rpc.sepolia.mantle.xyz'] },
+  },
+  blockExplorers: {
+    default: { name: 'Mantle Sepolia Explorer', url: 'https://explorer.sepolia.mantle.xyz' },
   },
 }
 
@@ -133,7 +136,7 @@ const zkSyncTestnet = {
 }
 
 const { chains, publicClient } = configureChains(
-  [mantleTestnet, zkSyncTestnet],
+  [mantleSepolia, zkSyncTestnet],
   [publicProvider()]
 )
 

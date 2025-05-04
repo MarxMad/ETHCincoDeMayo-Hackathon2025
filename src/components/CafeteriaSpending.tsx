@@ -22,7 +22,7 @@ import {
   Select,
   Badge,
 } from '@chakra-ui/react'
-import { useAccount, useContractRead, useContractWrite } from 'wagmi'
+import { useAccount, useContractRead, useContractWrite, useBalance } from 'wagmi'
 import { useState } from 'react'
 import { FaUtensils, FaStore, FaHistory } from 'react-icons/fa'
 
@@ -32,6 +32,20 @@ const CAFETERIAS = [
   { id: 3, name: 'Cafetería Sur', location: 'Edificio Sur' },
 ]
 
+const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [{ name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    type: 'function',
+    stateMutability: 'view',
+  },
+];
+
+const CONTRACT_ADDRESS = '0x83501eAE542748590639649f2E951B653C509b1b';
+const MANTLE_ID = 5003;
+
 const CafeteriaSpending = () => {
   const { address } = useAccount()
   const toast = useToast()
@@ -39,9 +53,16 @@ const CafeteriaSpending = () => {
   const [selectedCafeteria, setSelectedCafeteria] = useState('')
   const buttonSize = useBreakpointValue({ base: 'md', md: 'lg' })
 
+  // Saldo real de la wallet (MNT)
+  const { data: nativeBalance } = useBalance({
+    address: address,
+    chainId: MANTLE_ID,
+    watch: true,
+  });
+
   const { data: balance } = useContractRead({
-    address: '0x...',
-    abi: [],
+    address: CONTRACT_ADDRESS,
+    abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address],
   }) as { data: bigint | undefined }
@@ -88,7 +109,7 @@ const CafeteriaSpending = () => {
           <Stat>
             <StatLabel color="gray.600" fontSize="sm">Saldo Disponible</StatLabel>
             <StatNumber color="brand.500" fontSize="3xl">
-              {typeof balance === 'bigint' ? balance.toString() : '0'} MNT
+              {nativeBalance ? Number(nativeBalance.formatted).toFixed(4) : '0'} MNT
             </StatNumber>
             <StatHelpText color="gray.500">
               Actualizado al {new Date().toLocaleDateString()}

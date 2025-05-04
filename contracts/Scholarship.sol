@@ -1,82 +1,50 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.25;
+
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+//import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
 
-contract Scholarship is ERC20, Ownable {
-    struct Task {
-        string description;
-        bool completed;
-        uint256 reward;
+contract Beca is ERC20, Ownable {
+    mapping(address => bool) public registeredStudents;
+    mapping(address => bool) public authorizedBusinesses;
+    bool public B2B_transfersAllowed;
+    //mapping(address => uint) public biz2bizTickets; 
+    //mapping(address => address) public authorizedBisList;      /// Este mapping guarda la lista de BIS autorizadas, para que puedan pedir acceso a sus contratos.  
+    
+    // Solo permitimos que se le haga un transferencia entre negocios si el flag está activado (desactivado por default)
+    constructor() ERC20("BecaUSDC", "bUSDC") Ownable(msg.sender) {
+        B2B_transfersAllowed = false; // Inicialmente desactivado
     }
 
-    struct Student {
-        bool isRegistered;
-        uint256 balance;
-        mapping(uint256 => bool) completedTasks;
+
+
+    // Función para registrar alumnos (solo dueño)
+    function registerStudent(address _alumno) external onlyOwner{
+        registeredStudents[_alumno] = true;
     }
 
-    mapping(address => Student) public students;
-    Task[] public tasks;
-    mapping(address => bool) public approvedCafeterias;
-
-    event TaskCompleted(address indexed student, uint256 taskId, uint256 reward);
-    event CafeteriaApproved(address indexed cafeteria);
-    event CafeteriaRemoved(address indexed cafeteria);
-    event PurchaseMade(address indexed student, address indexed cafeteria, uint256 amount);
-
-    constructor() ERC20("UniFood Token", "UFT") {
-        // Inicializar tareas básicas
-        tasks.push(Task("Completar curso introductorio", false, 100));
-        tasks.push(Task("Participar en evento universitario", false, 50));
-        tasks.push(Task("Mantener promedio académico", false, 200));
+    // Función para autorizar negocios (solo dueño)
+    function authorizeBisness(address _negocio, bool _autorizado) external{
+        authorizedBusinesses[_negocio] = _autorizado;
     }
 
-    function registerStudent() external {
-        require(!students[msg.sender].isRegistered, "Ya estás registrado");
-        students[msg.sender].isRegistered = true;
+    // Emitir becas en USDT (solo dueño)
+    function otorgarBeca(address _alumno, uint256 _monto) external onlyOwner {
+        require(registeredStudents[_alumno], "Beca: Alumno no registrado");
+        _mint(_alumno, _monto);
     }
 
-    function completeTask(uint256 taskId) external {
-        require(students[msg.sender].isRegistered, "No estás registrado");
-        require(taskId < tasks.length, "Tarea no existe");
-        require(!students[msg.sender].completedTasks[taskId], "Tarea ya completada");
-
-        students[msg.sender].completedTasks[taskId] = true;
-        uint256 reward = tasks[taskId].reward;
-        _mint(msg.sender, reward);
-        students[msg.sender].balance += reward;
-
-        emit TaskCompleted(msg.sender, taskId, reward);
+    // Transferencias entre negocios (opcional)
+    function B2B(address _destino, uint256 _monto) external {
+        require(authorizedBusinesses[msg.sender] && authorizedBusinesses[_destino], "BecaToken: Negocio no autorizado");
+        require(B2B_transfersAllowed, "BecaToken: Transferencias bloqueadas");
+        _transfer(msg.sender, _destino, _monto);
     }
 
-    function approveCafeteria(address cafeteria) external onlyOwner {
-        approvedCafeterias[cafeteria] = true;
-        emit CafeteriaApproved(cafeteria);
+    // Activar/desactivar transferencias entre negocios (solo dueño)
+    function toggleB2Btransfers() external{
+        B2B_transfersAllowed = !B2B_transfersAllowed;
     }
-
-    function removeCafeteria(address cafeteria) external onlyOwner {
-        approvedCafeterias[cafeteria] = false;
-        emit CafeteriaRemoved(cafeteria);
-    }
-
-    function makePurchase(address cafeteria, uint256 amount) external {
-        require(students[msg.sender].isRegistered, "No estás registrado");
-        require(approvedCafeterias[cafeteria], "Cafetería no aprobada");
-        require(students[msg.sender].balance >= amount, "Saldo insuficiente");
-
-        students[msg.sender].balance -= amount;
-        _transfer(msg.sender, cafeteria, amount);
-
-        emit PurchaseMade(msg.sender, cafeteria, amount);
-    }
-
-    function getStudentBalance(address student) external view returns (uint256) {
-        return students[student].balance;
-    }
-
-    function isTaskCompleted(address student, uint256 taskId) external view returns (bool) {
-        return students[student].completedTasks[taskId];
-    }
-} 
+}

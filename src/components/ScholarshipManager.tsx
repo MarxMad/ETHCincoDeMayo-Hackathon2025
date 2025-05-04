@@ -26,6 +26,17 @@ import { useAccount, useContractRead, useContractWrite } from 'wagmi'
 import { useState } from 'react'
 import { FaWallet, FaHistory } from 'react-icons/fa'
 
+const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [{ name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    type: 'function',
+    stateMutability: 'view',
+  },
+];
+
 const ScholarshipManager = () => {
   const { address } = useAccount()
   const toast = useToast()
@@ -33,8 +44,8 @@ const ScholarshipManager = () => {
   const buttonSize = useBreakpointValue({ base: 'md', md: 'lg' })
 
   const { data: balance } = useContractRead({
-    address: '0x...',
-    abi: [],
+    address: '0x83501eAE542748590639649f2E951B653C509b1b',
+    abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address],
   }) as { data: bigint | undefined }
